@@ -1,39 +1,72 @@
-name: Build and Push Docker Image
+FROM nvidia/cuda:12.1.1-cudnn8-devel-ubuntu22.04
 
-on:
-  push:
-    branches:
-      - main
-    paths:
-      - 'Dockerfile'
-      - '.github/workflows/docker-build.yml'
-  workflow_dispatch:  # for manual trigger
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONUNBUFFERED=1
+ENV STABLEWM_HOME=/workspace/stablewm_home
 
-jobs:
-  build-and-push:
-    runs-on: ubuntu-latest
+# Base packages
+RUN apt-get update && apt-get install -y \
+    python3.10 \
+    python3.10-dev \
+    python3-pip \
+    git \
+    curl \
+    wget \
+    vim \
+    tmux \
+    htop \
+    unzip \
+    ca-certificates \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender-dev \
+    swig \
+    openssh-server \
+    && rm -rf /var/lib/apt/lists/*
 
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+# Symlinks
+RUN ln -sf /usr/bin/python3.10 /usr/bin/python && \
+    ln -sf /usr/bin/pip3 /usr/bin/pip
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+# pip upgrade
+RUN pip install --upgrade pip
 
-      - name: Login to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+# PyTorch (CUDA 12.1)
+RUN pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
 
-      - name: Build and Push
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          push: true
-          platforms: linux/amd64
-          tags: |
-            b8k3/swm-dev:latest
-            b8k3/swm-dev:${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+# stable-worldmodel (PyPI release)
+# Source code will be cloned separately to /workspace for editable development
+RUN pip install 'stable-worldmodel[all]'
+
+# Dev tools
+RUN pip install \
+    jupyter \
+    jupyterlab \
+    ipykernel \
+    matplotlib \
+    seaborn \
+    pandas \
+    numpy \
+    wandb \
+    boto3 \
+    awscli \
+    tqdm \
+    rich
+
+# tmux config
+RUN echo "set -g mouse on" >> /root/.tmux.conf && \
+    echo "set -g history-limit 10000" >> /root/.tmux.conf && \
+    echo "set -g status-right '#S'" >> /root/.tmux.conf
+
+# SSH config for VS Code Remote
+RUN mkdir -p /var/run/sshd && \
+    echo "PermitRootLogin yes" >> /etc/ssh/sshd_config && \
+    echo "PasswordAuthentication no" >> /etc/ssh/sshd_config
+
+WORKDIR /workspace
+
+EXPOSE 22 8888
+
+CMD ["/bin/bash"]

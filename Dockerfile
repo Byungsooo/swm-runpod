@@ -69,4 +69,5 @@ WORKDIR /workspace
 
 EXPOSE 22 8888
 
-CMD ["/bin/bash"]
+# Start SSH daemon in foreground to keep container alive
+CMD ["/usr/sbin/sshd", "-D"]

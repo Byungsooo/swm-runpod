@@ -50,6 +50,9 @@ RUN echo "set -g mouse on" >> /root/.tmux.conf && \
     echo "set -g history-limit 10000" >> /root/.tmux.conf && \
     echo "set -g status-right '#S'" >> /root/.tmux.conf
 
+# Convenient alias to run first-time setup script
+RUN echo "alias swm-setup='cd /workspace && curl -s https://raw.githubusercontent.com/Byungsooo/swm-runpod/main/setup.sh | bash'" >> /root/.bashrc
+
 # SSH config for VS Code Remote
 RUN mkdir -p /var/run/sshd && \
     echo "PermitRootLogin yes" >> /etc/ssh/sshd_config && \

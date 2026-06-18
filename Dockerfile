@@ -53,6 +53,10 @@ RUN echo "set -g mouse on" >> /root/.tmux.conf && \
 # Convenient alias to run first-time setup script
 RUN echo "alias swm-setup='cd /workspace && curl -s https://raw.githubusercontent.com/Byungsooo/swm-runpod/main/setup.sh | bash'" >> /root/.bashrc
 
+# Default git identity (override later with --global if needed)
+RUN git config --global user.email "hamalove@gmail.com" && \
+    git config --global user.name "Byungsooo"
+ 
 # SSH config for VS Code Remote
 RUN mkdir -p /var/run/sshd && \
     echo "PermitRootLogin yes" >> /etc/ssh/sshd_config && \

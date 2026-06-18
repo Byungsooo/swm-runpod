@@ -1,49 +1,62 @@
 #!/bin/bash
+# setup.sh - First-time initialization script for RunPod instance
+# Run once after launching a new Pod:
+#   export AWS_ACCESS_KEY_ID="..."
+#   export AWS_SECRET_ACCESS_KEY="..."
+#   curl -s https://raw.githubusercontent.com/Byungsooo/swm-runpod/main/setup.sh | bash
 set -e
 
 echo "=== SWM RunPod Setup ==="
 
-# Check if setup is completed
+# Skip if already initialized
 if [ -f /workspace/.setup_done ]; then
     echo "Already set up. Skipping."
     exit 0
 fi
 
-# swm-runpod repo clone
+# Clone this repo
 echo "[1/4] Cloning swm-runpod..."
 cd /workspace
 git clone https://github.com/Byungsooo/swm-runpod.git
 
-# stable-worldmodel source code clone
+# Clone stable-worldmodel source for editable development
 echo "[2/4] Cloning stable-worldmodel..."
 git clone https://github.com/galilai-group/stable-worldmodel.git
 
-# Install in editable mode
+# Install in editable mode so code changes are reflected immediately
 echo "[3/4] Installing stable-worldmodel in editable mode..."
 cd stable-worldmodel
 pip install -e ".[all]" --quiet
 cd /workspace
 
-# S3 credentials setup
-echo "[4/4] Configuring S3..."
+# Configure AWS S3 credentials (requires AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY env vars)
+echo "[4/4] Configuring AWS S3..."
 mkdir -p /root/.aws
-cat > /root/.aws/credentials << EOF
-[default]
-aws_access_key_id=${RUNPOD_S3_ACCESS_KEY}
-aws_secret_access_key=${RUNPOD_S3_SECRET_KEY}
-EOF
 
-cat > /root/.aws/config << EOF
+if [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ]; then
+    echo "WARNING: AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY not set."
+    echo "S3 credentials not configured. Export them before running this script if S3 access is needed."
+else
+    cat > /root/.aws/credentials << CREDS
+[default]
+aws_access_key_id=${AWS_ACCESS_KEY_ID}
+aws_secret_access_key=${AWS_SECRET_ACCESS_KEY}
+CREDS
+
+    cat > /root/.aws/config << CONFIG
 [default]
 region=us-east-1
-EOF
+CONFIG
+    echo "AWS credentials configured."
+fi
 
-# Completion marking
+# Mark setup as complete
 touch /workspace/.setup_done
 
 echo ""
-echo "=== Setup Complete! ==="
-echo "- stable-worldmodel: /workspace/stable-worldmodel"
-echo "- swm-runpod:        /workspace/swm-runpod"
+echo "=== Setup Complete ==="
+echo "  stable-worldmodel : /workspace/stable-worldmodel"
+echo "  swm-runpod        : /workspace/swm-runpod"
+echo "  S3 bucket         : s3://swm-research"
 echo ""
-echo "Run 'tmux new -s dev' to start a tmux session."
+echo "Tip: run 'tmux new -s dev' to start a tmux session."

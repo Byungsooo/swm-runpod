@@ -32,6 +32,16 @@ cd stable-worldmodel
 pip install -e ".[all]" --quiet
 cd /workspace
 
+# Configure GitHub credentials for HTTPS push (requires GITHUB_TOKEN env var)
+if [ -n "$GITHUB_TOKEN" ]; then
+    git config --global credential.helper store
+    echo "https://Byungsooo:${GITHUB_TOKEN}@github.com" > /root/.git-credentials
+    chmod 600 /root/.git-credentials
+    echo "GitHub credentials configured."
+else
+    echo "WARNING: GITHUB_TOKEN not set. Git push over HTTPS will require manual auth."
+fi
+
 # Configure AWS S3 credentials (requires AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY env vars)
 echo "[4/4] Configuring AWS S3..."
 mkdir -p /root/.aws

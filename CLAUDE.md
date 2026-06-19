@@ -28,7 +28,7 @@ swm-setup
 
 This alias (defined in `.bashrc` inside the Docker image) runs `setup.sh` from this repo, which:
 1. Clones this repo (`swm-runpod`) into `/workspace`
-2. Clones `stable-worldmodel` into `/workspace` and installs it in editable mode (`pip install -e ".[all]"`)
+2. Clones the **forked** `stable-worldmodel` (`Byungsooo/stable-worldmodel`) into `/workspace`, adds `galilai-group/stable-worldmodel` as the `upstream` remote, and installs in editable mode (`pip install -e ".[all]"`)
 3. Configures AWS credentials from env vars
 4. Marks setup complete so re-running is a no-op
 
@@ -40,9 +40,16 @@ cd /workspace && curl -s https://raw.githubusercontent.com/Byungsooo/swm-runpod/
 ## Working with stable-worldmodel
 
 - Installed in **editable mode** at `/workspace/stable-worldmodel` — code edits take effect immediately, no reinstall needed.
+- Fork: `Byungsooo/stable-worldmodel` (origin). Upstream: `galilai-group/stable-worldmodel`. To sync upstream changes: `git fetch upstream && git merge upstream/main`.
 - Claude has full freedom to modify, refactor, and experiment with the swm codebase. No need to ask before making changes — this is a research sandbox, not production code. Prefer creating new branches/files for experimental work when changes are large, but small iterative edits in place are fine.
 - swm provides the data pipeline, baseline models (DINO-WM, LeWM, TD-MPC2, PLDM), and evaluation protocols. The typical workflow is: pull/generate data via swm → train a model (custom or baseline) → evaluate using swm's protocols.
 - Reference training scripts live in `scripts/train/` (e.g. `lewm.py`, `prejepa.py` for DINO-WM reproduction).
+
+## MuJoCo / Rendering
+
+- `MUJOCO_GL=egl` is set globally in the Docker image — MuJoCo-based envs (e.g. `swm/OGBScene-v0`, `swm/OGBCube-v0`, Fetch robotics) render headlessly without any extra setup.
+- Do **not** set `MUJOCO_GL` manually in notebooks; it is already inherited from the environment.
+- The EGL fix required force-installing `libegl1_1.4.0-1` (Ubuntu jammy package) because the base image ships a stub `libEGL.so` without the full GLVND dispatch. This is baked into the Dockerfile.
 
 ## Session Persistence
 
@@ -64,11 +71,14 @@ cd /workspace && curl -s https://raw.githubusercontent.com/Byungsooo/swm-runpod/
 
 ```
 swm-runpod/
-├── Dockerfile              # custom dev image definition
-├── setup.sh                 # first-time Pod initialization script
-├── CLAUDE.md                 # this file
+├── Dockerfile                    # custom dev image definition
+├── setup.sh                      # first-time Pod initialization script
+├── CLAUDE.md                     # this file
+├── quickstart.ipynb              # PushT random-policy demo
+├── quickstart_pusht.ipynb        # PushT extended demo
+├── quickstart_ogbscene.ipynb     # OGBScene (robotic arm) random-policy demo
 └── .github/workflows/
-    └── docker-build.yml     # auto-builds & pushes b8k3/swm-dev:latest on push to main
+    └── docker-build.yml          # auto-builds & pushes b8k3/swm-dev:latest on push to main
 ```
 
 Changes to `Dockerfile` or the workflow file trigger an automatic rebuild via GitHub Actions and push to Docker Hub (`b8k3/swm-dev:latest`). After a rebuild, existing Pods need to be terminated and redeployed to pick up the new image — they don't auto-update.

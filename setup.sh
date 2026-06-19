@@ -19,9 +19,12 @@ echo "[1/4] Cloning swm-runpod..."
 cd /workspace
 git clone https://github.com/Byungsooo/swm-runpod.git
 
-# Clone stable-worldmodel source for editable development
-echo "[2/4] Cloning stable-worldmodel..."
-git clone https://github.com/galilai-group/stable-worldmodel.git
+# Clone stable-worldmodel from your fork, with upstream pointing to the original repo
+echo "[2/4] Cloning stable-worldmodel (your fork)..."
+git clone https://github.com/Byungsooo/stable-worldmodel.git
+cd stable-worldmodel
+git remote add upstream https://github.com/galilai-group/stable-worldmodel.git
+cd /workspace
 
 # Install in editable mode so code changes are reflected immediately
 echo "[3/4] Installing stable-worldmodel in editable mode..."

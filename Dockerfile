@@ -3,6 +3,7 @@ FROM runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
 ENV STABLEWM_HOME=/workspace/stablewm_home
+ENV MUJOCO_GL=egl
 
 # Base packages
 RUN apt-get update && apt-get install -y \
@@ -22,6 +23,15 @@ RUN apt-get update && apt-get install -y \
     swig \
     openssh-server \
     && rm -rf /var/lib/apt/lists/*
+
+# Install libegl1 (GLVND EGL dispatch) for headless MuJoCo rendering.
+# The version in the base image is a stub; we force-install the real one.
+# --force-depends is safe here: the only missing dep (libegl-mesa0) is an
+# optional software-rendering fallback we don't need on GPU pods.
+RUN wget -q "http://archive.ubuntu.com/ubuntu/pool/main/libg/libglvnd/libegl1_1.4.0-1_amd64.deb" -O /tmp/libegl1.deb \
+    && dpkg -i --force-depends /tmp/libegl1.deb \
+    && rm /tmp/libegl1.deb \
+    && ldconfig
 
 # pip upgrade
 RUN pip install --upgrade pip

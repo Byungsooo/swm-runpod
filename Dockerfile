@@ -22,6 +22,7 @@ RUN apt-get update && apt-get install -y \
     libxrender-dev \
     swig \
     openssh-server \
+    cron \
     && rm -rf /var/lib/apt/lists/*
 
 # Install libegl1 (GLVND EGL dispatch) for headless MuJoCo rendering.
@@ -76,9 +77,8 @@ WORKDIR /workspace
 
 EXPOSE 22 8888
 
-# Inject SSH public key from RunPod environment variable and start SSH daemon
-CMD mkdir -p /root/.ssh && \
-    chmod 700 /root/.ssh && \
-    echo "$PUBLIC_KEY" >> /root/.ssh/authorized_keys && \
-    chmod 600 /root/.ssh/authorized_keys && \
-    /usr/sbin/sshd -D
+COPY start.sh /start.sh
+COPY notify.sh /usr/local/bin/notify.sh
+RUN chmod +x /start.sh /usr/local/bin/notify.sh
+
+CMD ["/start.sh"]

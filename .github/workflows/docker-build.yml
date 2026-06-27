@@ -6,6 +6,8 @@ on:
       - main
     paths:
       - 'Dockerfile'
+      - 'start.sh'
+      - 'notify.sh'
       - '.github/workflows/docker-build.yml'
   workflow_dispatch: # Allow manual trigger
 

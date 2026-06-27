@@ -13,8 +13,16 @@ cat > /etc/profile.d/pod-env.sh <<ENV
 export AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID:-}"
 export AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY:-}"
 export AWS_DEFAULT_REGION="${AWS_DEFAULT_REGION:-us-east-1}"
+export GITHUB_TOKEN="${GITHUB_TOKEN:-}"
 ENV
 chmod 600 /etc/profile.d/pod-env.sh
+
+# Write git credentials so HTTPS push works in SSH sessions without VS Code helper
+if [ -n "${GITHUB_TOKEN:-}" ]; then
+    git config --global credential.helper store
+    printf "https://Byungsooo:%s@github.com\n" "${GITHUB_TOKEN}" > /root/.git-credentials
+    chmod 600 /root/.git-credentials
+fi
 
 # Write credentials file for awscli (used by cron and any shell)
 if [ -n "${AWS_ACCESS_KEY_ID:-}" ] && [ -n "${AWS_SECRET_ACCESS_KEY:-}" ]; then

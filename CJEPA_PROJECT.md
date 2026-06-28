@@ -107,9 +107,10 @@ This is a solid contribution to `galilai-group/stable-worldmodel`:
 
 ## Session Log
 
-### 2026-06-28 — Phase 1+2 complete
+### 2026-06-28 — Phase 1+2 complete, architecture doc added
 - Read C-JEPA paper; assessed codebase; finalized plan; estimated cost ~$1–2/run
 - Implemented `wm/cjepa/` module (module.py + cjepa.py): bidirectional transformer, object-level masking, identity anchor, temporal PE, Hungarian matching MPC
 - Implemented training script (`scripts/train/cjepa.py`) + config (`cjepa.yaml`)
 - All smoke tests pass: forward_train, backward, get_cost ✓
+- Added `CJEPA_ARCHITECTURE.html` — architecture diagrams, loss/training explanation, references
 - **Next**: Phase 3 — VideoSAUR integration (download checkpoint, implement `VideoSAUREncoder`)

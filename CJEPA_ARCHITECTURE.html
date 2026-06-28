@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>C-JEPA Implementation Notes</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface2: #22263a;
+    --border: #2e3250;
+    --text: #e2e4f0;
+    --muted: #8b90b0;
+    --accent: #7c9ef8;
+    --accent2: #a78bfa;
+    --green: #4ade80;
+    --orange: #fb923c;
+    --red: #f87171;
+    --yellow: #fbbf24;
+    --code-bg: #0d1117;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    font-size: 15px;
+    line-height: 1.65;
+    padding: 2rem;
+  }
+  .page { max-width: 900px; margin: 0 auto; }
+
+  h1 { font-size: 2rem; font-weight: 700; color: var(--accent); margin-bottom: 0.25rem; }
+  h2 { font-size: 1.25rem; font-weight: 600; color: var(--accent2); margin: 2.5rem 0 0.75rem; border-bottom: 1px solid var(--border); padding-bottom: 0.35rem; }
+  h3 { font-size: 1rem; font-weight: 600; color: var(--text); margin: 1.5rem 0 0.5rem; }
+  p { margin-bottom: 0.75rem; color: var(--text); }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  .subtitle { color: var(--muted); font-size: 0.9rem; margin-bottom: 2rem; }
+  .tag {
+    display: inline-block;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1px 8px;
+    font-size: 0.8rem;
+    color: var(--muted);
+    margin-right: 6px;
+  }
+
+  pre, code {
+    font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+    font-size: 0.85rem;
+  }
+  code {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1px 5px;
+    color: #c9d1d9;
+  }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.25rem 1.5rem;
+    overflow-x: auto;
+    line-height: 1.55;
+    margin: 0.75rem 0 1rem;
+  }
+  pre code { background: none; border: none; padding: 0; }
+
+  .diagram {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    border-radius: 8px;
+    padding: 1.25rem 1.5rem;
+    overflow-x: auto;
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    font-size: 0.82rem;
+    line-height: 1.6;
+    margin: 0.75rem 0 1rem;
+    white-space: pre;
+  }
+  .diagram .dim   { color: #6e7a9a; }
+  .diagram .label { color: #7c9ef8; font-weight: bold; }
+  .diagram .mask  { color: #f87171; }
+  .diagram .eq    { color: #fbbf24; }
+  .diagram .arrow { color: #4ade80; }
+  .diagram .note  { color: #8b90b0; font-style: italic; }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.25rem 1.5rem;
+    margin: 0.75rem 0 1rem;
+  }
+  .card-header {
+    font-weight: 600;
+    color: var(--accent2);
+    margin-bottom: 0.5rem;
+    font-size: 0.95rem;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0.75rem 0 1rem;
+    font-size: 0.88rem;
+  }
+  th {
+    text-align: left;
+    padding: 0.5rem 0.75rem;
+    background: var(--surface2);
+    color: var(--accent);
+    border-bottom: 2px solid var(--border);
+    font-weight: 600;
+  }
+  td {
+    padding: 0.45rem 0.75rem;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  tr:last-child td { border-bottom: none; }
+
+  .badge {
+    display: inline-block;
+    border-radius: 4px;
+    padding: 1px 7px;
+    font-size: 0.78rem;
+    font-weight: 600;
+  }
+  .badge-green  { background: #14532d; color: var(--green); }
+  .badge-orange { background: #431407; color: var(--orange); }
+  .badge-blue   { background: #1e3a5f; color: var(--accent); }
+
+  .ref-list { list-style: none; padding: 0; }
+  .ref-list li {
+    padding: 0.4rem 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.88rem;
+  }
+  .ref-list li:last-child { border-bottom: none; }
+  .ref-num { color: var(--muted); min-width: 2rem; display: inline-block; }
+
+  .formula {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--yellow);
+    border-radius: 6px;
+    padding: 0.75rem 1rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.9rem;
+    color: var(--yellow);
+    margin: 0.6rem 0;
+  }
+
+  .note-box {
+    background: #1a2540;
+    border: 1px solid #2a4070;
+    border-radius: 8px;
+    padding: 0.85rem 1.1rem;
+    margin: 0.75rem 0;
+    font-size: 0.9rem;
+    color: #a8bfef;
+  }
+  .note-box::before {
+    content: "ℹ  ";
+    color: var(--accent);
+    font-weight: bold;
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+<h1>C-JEPA: Implementation Notes</h1>
+<p class="subtitle">
+  Reimplementation of <em>Causal-JEPA</em> (ICML 2026) inside
+  <code>stable-worldmodel</code>, targeting PushT. &nbsp;
+  <span class="tag">Phase 1+2 complete</span>
+  <span class="tag">arXiv 2602.11389</span>
+  <a href="https://arxiv.org/abs/2602.11389" style="font-size:0.85rem">paper ↗</a>
+</p>
+
+<!-- ================================================================ -->
+<h2>1 · What is C-JEPA?</h2>
+
+<p>
+  C-JEPA is an object-centric world model that learns by predicting object slot
+  representations in latent space — never in pixel space. It combines two ideas:
+</p>
+
+<ul style="padding-left:1.4rem; margin-bottom:0.75rem;">
+  <li style="margin-bottom:0.4rem">
+    <strong>JEPA</strong>
+    (<a href="https://arxiv.org/abs/2301.08243">Joint Embedding Predictive Architecture [1]</a>):
+    predict the representation of masked regions from visible context, using a
+    separate target encoder. No decoder, no reconstruction loss.
+  </li>
+  <li style="margin-bottom:0.4rem">
+    <strong>Object-centric slots</strong>
+    (<a href="https://arxiv.org/abs/2006.15055">Slot Attention [2]</a>):
+    encode each frame as <em>N</em> learned "slot" vectors, one per object.
+    Slots are permutation-equivariant — there is no fixed object ordering.
+  </li>
+</ul>
+
+<p>
+  The <strong>causal</strong> part of C-JEPA comes from object-level
+  <em>history</em> masking: randomly selected objects are hidden across
+  the history window, forcing the model to infer their trajectories from other
+  objects and from the anchor at time&nbsp;<em>t</em>₀. This instills a
+  causal, object-centric inductive bias without any explicit causal graph.
+</p>
+
+<!-- ================================================================ -->
+<h2>2 · High-Level Architecture</h2>
+
+<div class="diagram"><span class="dim">Video (B, T_total, C, H, W)</span>
+         │
+         ▼ <span class="label">Slot Encoder</span>  <span class="note">(frozen — no gradients)</span>
+<span class="note">  VideoSAUR: frozen DINOv2 ViT-S/14 → Slot Attention (2 iters)</span>
+<span class="note">  Ref: [3] VideoSAUR, [4] DINOv2, [2] Slot Attention</span>
+         │
+         ▼
+<span class="label">  Slots  Z</span> <span class="dim">(B, T_total, N=4, D=128)</span>     <span class="dim">Action emb  (B, T_total, 1, D)</span>
+         │                                        │
+         ▼ <span class="mask">Object-Level Masking</span>  <span class="dim">(Sec 4.2)</span>   │
+<span class="mask">  Choose |M| ~ Uniform{0 … max_M} objects at random</span>  │
+<span class="mask">  For each masked object i and timestep τ > t₀:</span>     │
+<span class="eq">    z̃_τ^i  =  φ(z_{t₀}^i)  +  e_τ</span>               │
+<span class="dim">              └─ anchor ─┘   └─ temporal PE ─┘</span>    │
+<span class="mask">  All future slots (τ ≥ T_h) masked the same way</span>   │
+<span class="mask">  Visible slots get temporal PE added: z_τ^i + e_τ</span> │
+         │                                        │
+         ▼ concat entities, flatten <span class="dim">→ (B, T_total × N_total, D)</span>
+─────────────────────────────────────────────────────
+         │
+         ▼ <span class="label">Bidirectional Transformer</span>  <span class="dim">(predictor  f)</span>
+<span class="note">  6 layers · 16 heads · dim_head=64 · MLP=2048 · D=128</span>
+<span class="note">  Full attention over ALL T_total × N_total tokens (no causal mask)</span>
+         │
+─────────────────────────────────────────────────────
+         │  reshape <span class="dim">→ (B, T_total, N_total, D)</span>
+         │  extract first N slot dims
+         ▼
+<span class="label">  Predicted slots</span> <span class="dim">(B, T_total, N, D)</span>
+         │
+         ▼ MSE at masked positions only
+<span class="label">  Loss</span>  L = MSE( pred[is_masked],  target[is_masked].detach() )</div>
+
+<div class="note-box">
+  The slot encoder is fully <strong>frozen</strong> during training. Only the
+  predictor (<code>BidirectionalTransformer</code>), the anchor projection
+  (<code>φ</code>), and the temporal positional embeddings (<code>e_τ</code>)
+  are learned.
+</div>
+
+<!-- ================================================================ -->
+<h2>3 · Slot Encoder — VideoSAUR</h2>
+
+<p>
+  <a href="https://arxiv.org/abs/2308.11971"><strong>VideoSAUR [3]</strong></a>
+  is a self-supervised video segmentation model that produces
+  object-level slot representations per frame. The checkpoint used here is
+  from <code>HazelNam/CJEPA</code> on HuggingFace (Phase 3 integration).
+</p>
+
+<div class="card">
+  <div class="card-header">VideoSAUR forward pass (per frame)</div>
+  <div class="diagram" style="margin:0; border:none; padding:0; border-left:none;"><span class="dim">Image (C, H, W) = (3, 224, 224)</span>
+       │
+       ▼ <span class="label">DINOv2 ViT-S/14</span>  <a href="https://arxiv.org/abs/2304.07193" style="color:#7c9ef8; font-size:0.8rem">[4]</a>
+<span class="note">  Patch size 14 → 16×16 = 256 patch tokens, dim=384</span>
+       │
+       ▼ <span class="label">Slot Attention</span> (2 iterations)  <a href="https://arxiv.org/abs/2006.15055" style="color:#7c9ef8; font-size:0.8rem">[2]</a>
+<span class="note">  Learnable slot initializers, competitive softmax routing</span>
+       │
+       ▼
+<span class="label">  N=4 slots</span>  <span class="dim">(N, D=128)  per frame</span></div>
+</div>
+
+<p>
+  <strong>Slot Attention</strong> <a href="https://arxiv.org/abs/2006.15055">[2]</a>
+  is a differentiable routing mechanism: <em>N</em> learnable slot vectors
+  compete to explain patch tokens via normalised dot-product attention. Each
+  iteration refines the slots. The output is permutation-equivariant — the
+  set of slots has no canonical ordering, which is why C-JEPA uses
+  <em>only temporal</em> positional encoding (no entity-axis PE).
+</p>
+
+<p>
+  In our implementation, <code>DummySlotEncoder</code> is used as a
+  placeholder for CPU testing. It is a single linear layer
+  (<code>nn.Linear(C·H·W, N·D)</code>) that produces slots with the correct
+  shape but no meaningful semantics. VideoSAUR integration is Phase 3.
+</p>
+
+<!-- ================================================================ -->
+<h2>4 · Object-Level Masking and the Identity Anchor</h2>
+
+<h3>4.1 Why object-level masking?</h3>
+<p>
+  Standard masked autoencoders (MAE, I-JEPA) mask patches. C-JEPA masks
+  entire object trajectories. This forces the model to reason about
+  <em>object permanence</em>: "where did that object go?" from the anchor
+  at&nbsp;<em>t</em>₀ and context from other objects.
+</p>
+
+<h3>4.2 Masking procedure (Sec 4.2 of paper)</h3>
+
+<ol style="padding-left:1.4rem; margin-bottom:0.75rem;">
+  <li style="margin-bottom:0.5rem">
+    Sample the number of masked objects:
+    <code>|M| ~ Uniform{0, 1, …, max_masked_slots}</code>
+    independently per batch item.
+  </li>
+  <li style="margin-bottom:0.5rem">
+    Choose <code>|M|</code> slot indices without replacement via random permutation.
+  </li>
+  <li style="margin-bottom:0.5rem">
+    For each masked object <em>i</em> and each timestep <em>τ &gt; t</em>₀
+    in the history window, replace the slot with:
+    <div class="formula">z̃_τ^i  =  φ(z_{t₀}^i)  +  e_τ     (Eq. 3 in paper)</div>
+    where <code>φ</code> is a learned linear projection (<code>anchor_proj</code>)
+    and <code>e_τ</code> is a learnable temporal positional embedding.
+    The slot at <em>t</em>₀ is kept as the <strong>identity anchor</strong>.
+  </li>
+  <li style="margin-bottom:0.5rem">
+    All slots at future timesteps (<em>τ ≥ T_h</em>) are always masked
+    using the same formula.
+  </li>
+  <li>
+    Visible slots receive temporal PE: <code>z_τ^i + e_τ</code>.
+  </li>
+</ol>
+
+<div class="note-box">
+  <strong>Why no entity-axis positional encoding?</strong>
+  Slots are permutation-equivariant — there is no meaningful canonical ordering.
+  Adding entity PE would break this equivariance. Only temporal PE is used,
+  consistent with Wu et al. 2023 (SlotFormer)
+  <a href="https://arxiv.org/abs/2210.05861">[5]</a>.
+  Object identity during inference is maintained purely through the identity
+  anchor <code>φ(z_{t₀}^i)</code>.
+</div>
+
+<h3>4.3 Masking implementation</h3>
+<pre><code class="python"># _build_masked_tokens in cjepa.py (simplified)
+
+t_embs = self.temporal_emb(torch.arange(T))   # (T, D) — learnable e_τ
+
+for b in range(B):
+    n_mask = randint(0, max_masked_slots + 1)
+    masked_objs = randperm(N)[:n_mask]
+
+    # history masking (τ > t₀ for chosen objects)
+    for i in masked_objs:
+        anchor = slots_all[b, 0, i]            # identity anchor at t₀
+        for tau in range(1, T_h):
+            tokens[b, tau, i] = anchor_proj(anchor) + t_embs[tau]
+
+    # future masking (all objects, all future timesteps)
+    for tau in range(T_h, T):
+        for i in range(N):
+            anchor = slots_all[b, 0, i]
+            tokens[b, tau, i] = anchor_proj(anchor) + t_embs[tau]
+
+# add temporal PE to visible slots
+tokens[visible] = tokens[visible] + t_embs[...][visible]
+# concatenate action/proprio aux tokens, flatten → (B, T*N_total, D)</code></pre>
+
+<!-- ================================================================ -->
+<h2>5 · Predictor — BidirectionalTransformer</h2>
+
+<p>
+  The predictor takes the full masked token sequence and outputs predictions
+  at every position. Unlike LeWM's causal predictor, it uses
+  <strong>full bidirectional attention</strong> — every token attends to every
+  other token. This lets history slots inform future predictions
+  <em>and</em> vice versa (e.g. a future action can inform history recovery).
+</p>
+
+<div class="card">
+  <div class="card-header">Architecture of BidirectionalTransformer</div>
+  <table style="margin:0;">
+    <thead><tr><th>Hyperparameter</th><th>Value (PushT)</th></tr></thead>
+    <tbody>
+      <tr><td>Number of layers</td><td>6</td></tr>
+      <tr><td>Attention heads</td><td>16</td></tr>
+      <tr><td>Head dimension</td><td>64</td></tr>
+      <tr><td>MLP hidden dim</td><td>2048</td></tr>
+      <tr><td>Slot dimension D</td><td>128</td></tr>
+      <tr><td>Sequence length L</td><td>T_total × N_total = 4 × 6 = 24 tokens</td></tr>
+      <tr><td>Attention type</td><td>Full (no causal mask)</td></tr>
+      <tr><td>Norm</td><td>LayerNorm (<code>elementwise_affine=False</code>)</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<p>
+  The <code>BidirectionalBlock</code> reuses the <code>Attention</code> and
+  <code>FeedForward</code> modules from <code>lewm/module.py</code>.
+  The only difference from LeWM's causal <code>Block</code> is the
+  <code>causal=False</code> argument to <code>Attention.forward</code>:
+</p>
+
+<pre><code class="python">class BidirectionalBlock(nn.Module):
+    def forward(self, x):
+        x = x + self.attn(self.norm1(x), causal=False)   # ← no causal mask
+        x = x + self.mlp(self.norm2(x))
+        return x</code></pre>
+
+<p>
+  N_total per timestep = N object slots + 1 action token + 1 proprio token = 6.
+  With T_total = T_h + T_p = 3 + 1 = 4 frames, the sequence is 4 × 6 = 24 tokens.
+</p>
+
+<!-- ================================================================ -->
+<h2>6 · Loss Function</h2>
+
+<p>
+  C-JEPA uses a single MSE loss on all masked slot positions — both the
+  history-masked slots (object-level masking) and the future-masked slots.
+  There is no regularisation term (contrast with LeWM's SIGReg).
+</p>
+
+<div class="formula">L  =  (1/|M_all|)  ·  Σ_{(τ,i) ∈ M_all}  ‖ f(Z̃)_τ^i  −  sg(z_τ^i) ‖²</div>
+
+<ul style="padding-left:1.4rem; margin-bottom:0.75rem; font-size:0.9rem;">
+  <li><code>M_all</code> — set of all masked (timestep, slot) pairs</li>
+  <li><code>f(Z̃)_τ^i</code> — predictor output at masked position <em>(τ, i)</em></li>
+  <li><code>z_τ^i</code> — target slot from the frozen slot encoder</li>
+  <li><code>sg(·)</code> — stop-gradient (targets come from frozen encoder, no EMA needed)</li>
+</ul>
+
+<p>
+  In code (<code>forward_train</code> in <code>cjepa.py</code>):
+</p>
+
+<pre><code class="python">loss = F.mse_loss(pred_slots[is_masked], slots_all[is_masked].detach())</code></pre>
+
+<p>
+  <code>is_masked</code> is a boolean tensor of shape <code>(B, T, N)</code>
+  marking every (batch, timestep, slot) triple that was masked. The loss is
+  averaged over all masked positions.
+</p>
+
+<div class="note-box">
+  <strong>No EMA target encoder.</strong> I-JEPA and similar methods use a
+  momentum-updated target encoder. C-JEPA skips this because VideoSAUR is
+  already frozen — the targets are stable by construction.
+</div>
+
+<!-- ================================================================ -->
+<h2>7 · Inference and MPC Planning</h2>
+
+<p>
+  At inference time there is <strong>no history masking</strong>. The predictor
+  receives the full history and predicts one future step at a time. To plan
+  over a horizon T_plan, we roll out autoregressively, sliding the history window.
+</p>
+
+<div class="diagram"><span class="dim">Initial observation history (B, S, T_h, C, H, W)     Goal frame (B, C, H, W)</span>
+         │                                                    │
+         ▼ <span class="label">_extract_slots</span>  <span class="dim">(frozen VideoSAUR)</span>            ▼ <span class="label">_extract_slots</span>
+<span class="dim">  slots_hist (B, S, T_h, N, D)</span>                     <span class="dim">goal_slots (B, N, D)</span>
+         │                                                    │
+         ▼ <span class="label">action_encoder</span>  <span class="dim">(learnable 1D-conv Embedder)</span>        │
+<span class="dim">  action_candidates (B, S, T_plan, act_dim)</span>                 │
+         │                                                    │
+         ▼ <span class="arrow">for t in range(T_plan):</span>                            │
+<span class="label">    _single_step_predict</span>  <span class="dim">(full history + masked future)</span>     │
+    slide window: <span class="dim">slots_hist ← [slots_hist[:,1:], pred]</span>     │
+         │                                                    │
+         ▼                                                    │
+<span class="dim">  predicted_slots (B, S, T_plan, N, D)</span>                      │
+         │                                                    │
+         ▼ take last frame  <span class="dim">(B, S, N, D)</span>                     │
+         ▼ <span class="label">Hungarian matching</span>  <a href="https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.linear_sum_assignment.html" style="color:#7c9ef8; font-size:0.8rem">[scipy.linear_sum_assignment]</a>
+<span class="note">  Align predicted slots to goal slots by minimising total L2 cost</span>
+<span class="note">  Needed because slot permutation has no canonical order</span>
+         │
+         ▼ sum squared L2 distance over matched slots
+<span class="label">  Cost  (B, S)</span>  →  <span class="label">CEM optimizer</span>  selects best action sequence</div>
+
+<h3>7.1 Hungarian Matching</h3>
+<p>
+  Because slot ordering is arbitrary (permutation-equivariant encoder),
+  predicted slots and goal slots may be in different orders. We use the
+  <a href="https://en.wikipedia.org/wiki/Hungarian_algorithm">Hungarian algorithm</a>
+  (<a href="https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.linear_sum_assignment.html"><code>scipy.optimize.linear_sum_assignment</code></a>)
+  to find the minimum-cost assignment:
+</p>
+
+<pre><code class="python">cost = torch.cdist(pred.float(), goal.float())  # (B*S, N, N)  pairwise L2
+for b in range(B * S):
+    _, col_ind = linear_sum_assignment(cost[b].cpu().numpy())
+    pred[b] = pred[b, col_ind]   # reorder pred to match goal</code></pre>
+
+<p>
+  Matching is applied only during MPC inference — not during training, where
+  both prediction targets and masked tokens share object indices by construction.
+</p>
+
+<h3>7.2 Single-step prediction</h3>
+
+<p>
+  <code>_single_step_predict</code> builds a context of T_h visible history
+  slots + 1 future masked slot (using identity anchor from <em>t</em>₀),
+  and runs the full predictor over this T_total = T_h+1 sequence:
+</p>
+
+<pre><code class="python">anchor  = slots_hist[:, 0]                         # (BS, N, D)  — t₀
+fut_tok = anchor_proj(anchor) + t_embs[T_h]        # masked future token
+                                                   # shape: (BS, N, D)
+# stack as (BS, T_total, N_total, D), flatten, pass to predictor
+preds   = predictor(flat)                          # (BS, T_total * N_total, D)
+pred_slots_future = preds[:, T_h, :N]             # extract the future frame</code></pre>
+
+<!-- ================================================================ -->
+<h2>8 · Training Pipeline</h2>
+
+<h3>8.1 Data flow</h3>
+<pre><code class="python">PushT dataset  →  (pixels, action, state, proprio)  per window of T_total frames
+     │
+     ▼  ToImage → Resize(224)  +  column normalizers
+     │
+     ▼  DataLoader  (batch_size=256, persistent_workers, bf16)
+     │
+     ▼  forward_train(batch)
+          │  slot encoder (frozen)    → slots  (B, T, N, D)
+          │  action encoder           → act_emb (B, T, 1, D)
+          │  proprio encoder          → prop_emb (B, T, 1, D)
+          │  _build_masked_tokens     → tokens (B, T*N_total, D) + is_masked
+          │  BidirectionalTransformer → preds   (B, T*N_total, D)
+          └→ MSE loss at masked positions → loss scalar</code></pre>
+
+<h3>8.2 Key config (PushT)</h3>
+
+<table>
+  <thead><tr><th>Parameter</th><th>Value</th><th>Source</th></tr></thead>
+  <tbody>
+    <tr><td>Epochs</td><td>30</td><td>paper App. E.3</td></tr>
+    <tr><td>Batch size</td><td>256</td><td>paper App. E.3</td></tr>
+    <tr><td>Learning rate</td><td>5e-4 (Adam)</td><td>paper App. E.3</td></tr>
+    <tr><td>LR schedule</td><td>Linear warmup 1% → cosine decay</td><td><code>stable-pretraining</code></td></tr>
+    <tr><td>Precision</td><td>bfloat16</td><td>standard</td></tr>
+    <tr><td>Gradient clip</td><td>1.0</td><td>standard</td></tr>
+    <tr><td>History T_h</td><td>3 frames</td><td>paper App. D</td></tr>
+    <tr><td>Future T_p</td><td>1 frame</td><td>paper App. D</td></tr>
+    <tr><td>Frameskip</td><td>5</td><td><code>pusht.yaml</code></td></tr>
+    <tr><td>max_masked_slots</td><td>2 (|M| ∈ {0,1,2})</td><td>paper App. D</td></tr>
+    <tr><td>N slots</td><td>4</td><td>paper App. D</td></tr>
+  </tbody>
+</table>
+
+<h3>8.3 File map</h3>
+
+<table>
+  <thead><tr><th>File</th><th>Purpose</th><th>Status</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><code>wm/cjepa/module.py</code></td>
+      <td>BidirectionalTransformer, TemporalPosEmb</td>
+      <td><span class="badge badge-green">done</span></td>
+    </tr>
+    <tr>
+      <td><code>wm/cjepa/cjepa.py</code></td>
+      <td>CJEPAWorldModel: encode, mask, train, rollout, MPC</td>
+      <td><span class="badge badge-green">done</span></td>
+    </tr>
+    <tr>
+      <td><code>scripts/train/cjepa.py</code></td>
+      <td>Lightning training script (Hydra entry point)</td>
+      <td><span class="badge badge-green">done</span></td>
+    </tr>
+    <tr>
+      <td><code>scripts/train/config/cjepa.yaml</code></td>
+      <td>All hyperparameters for PushT training</td>
+      <td><span class="badge badge-green">done</span></td>
+    </tr>
+    <tr>
+      <td><code>wm/cjepa/videosaur.py</code></td>
+      <td>VideoSAUREncoder (HuggingFace checkpoint loader)</td>
+      <td><span class="badge badge-orange">Phase 3</span></td>
+    </tr>
+    <tr>
+      <td><code>scripts/plan/config/pusht_cjepa.yaml</code></td>
+      <td>MPC eval config (reuses eval_wm.py as-is)</td>
+      <td><span class="badge badge-orange">Phase 5</span></td>
+    </tr>
+    <tr>
+      <td><code>tests/wm/test_cjepa.py</code></td>
+      <td>Unit tests: shapes, masking, loss monotonicity</td>
+      <td><span class="badge badge-orange">Phase 6</span></td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- ================================================================ -->
+<h2>9 · Differences from LeWM</h2>
+
+<table>
+  <thead><tr><th>Aspect</th><th>LeWM</th><th>C-JEPA</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>Representation</td>
+      <td>Single frame embedding (ViT patch mean)</td>
+      <td>N=4 object slots per frame (VideoSAUR)</td>
+    </tr>
+    <tr>
+      <td>Attention</td>
+      <td>Causal (autoregressive)</td>
+      <td>Bidirectional (full)</td>
+    </tr>
+    <tr>
+      <td>Masking</td>
+      <td>None during training</td>
+      <td>Object-level history + future masking</td>
+    </tr>
+    <tr>
+      <td>Loss</td>
+      <td>MSE + SIGReg regularisation</td>
+      <td>MSE only (frozen encoder → stable targets)</td>
+    </tr>
+    <tr>
+      <td>Target encoder</td>
+      <td>Momentum EMA</td>
+      <td>None (frozen VideoSAUR)</td>
+    </tr>
+    <tr>
+      <td>Positional encoding</td>
+      <td>Temporal + spatial (patch axis)</td>
+      <td>Temporal only (no entity axis)</td>
+    </tr>
+    <tr>
+      <td>MPC cost</td>
+      <td>L2 in frame embedding space</td>
+      <td>L2 after Hungarian slot matching</td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- ================================================================ -->
+<h2>10 · References</h2>
+
+<ul class="ref-list">
+  <li>
+    <span class="ref-num">[1]</span>
+    Assran et al. (2023) — <em>Self-supervised learning from images with a joint-embedding predictive architecture (I-JEPA)</em>.
+    <a href="https://arxiv.org/abs/2301.08243">arXiv:2301.08243</a>
+  </li>
+  <li>
+    <span class="ref-num">[2]</span>
+    Locatello et al. (2020) — <em>Object-centric learning with slot attention</em>.
+    <a href="https://arxiv.org/abs/2006.15055">arXiv:2006.15055</a>
+  </li>
+  <li>
+    <span class="ref-num">[3]</span>
+    Zadaianchuk et al. (2024) — <em>VideoSAUR: self-supervised video object segmentation</em>.
+    <a href="https://arxiv.org/abs/2308.11971">arXiv:2308.11971</a>
+  </li>
+  <li>
+    <span class="ref-num">[4]</span>
+    Oquab et al. (2023) — <em>DINOv2: learning robust visual features without supervision</em>.
+    <a href="https://arxiv.org/abs/2304.07193">arXiv:2304.07193</a>
+  </li>
+  <li>
+    <span class="ref-num">[5]</span>
+    Wu et al. (2022) — <em>SlotFormer: unsupervised visual dynamics simulation with object-centric models</em>.
+    <a href="https://arxiv.org/abs/2210.05861">arXiv:2210.05861</a>
+    (precedent for temporal-only PE in slot models)
+  </li>
+  <li>
+    <span class="ref-num">[6]</span>
+    C-JEPA paper — <em>Causal object-centric world models (ICML 2026)</em>.
+    <a href="https://arxiv.org/abs/2602.11389">arXiv:2602.11389</a>
+  </li>
+  <li>
+    <span class="ref-num">[7]</span>
+    Scipy — <em>linear_sum_assignment (Hungarian algorithm implementation)</em>.
+    <a href="https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.linear_sum_assignment.html">docs.scipy.org</a>
+  </li>
+</ul>
+
+<p style="margin-top:3rem; color:var(--muted); font-size:0.8rem; border-top:1px solid var(--border); padding-top:1rem;">
+  Generated 2026-06-28 · Phases 1 &amp; 2 of 6 complete ·
+  Repo: <code>Byungsooo/stable-worldmodel</code>
+</p>
+
+</div>
+</body>
+</html>

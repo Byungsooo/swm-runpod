@@ -36,27 +36,28 @@ Paper target (Table 3, PushT): **88.67% success rate** with |M|=1, 6×128 tokens
 
 ## Implementation Checklist
 
-### Phase 1: Core model
-- [ ] `stable_worldmodel/wm/cjepa/__init__.py`
-- [ ] `stable_worldmodel/wm/cjepa/module.py`
-  - [ ] `BidirectionalPredictor` (reuse `lewm/module.py:Block` with `causal=False`)
-  - [ ] `IdentityAnchorProjection` (`nn.Linear(128, 128)`, the `φ` in Eq. 3)
-  - [ ] `LearnableTemporalPosEmb` (`nn.Embedding(max_T, 128)`, the `e_τ`)
-  - [ ] `AuxEmbedder` (copy of `lewm/module.py:Embedder` for actions/proprio)
-- [ ] `stable_worldmodel/wm/cjepa/cjepa.py`
-  - [ ] `encode()` — VideoSAUR slots + aux embeddings
-  - [ ] `mask_history()` — object-level masking logic, identity anchor
-  - [ ] `forward_train()` — masking → predict → L_history + L_future
-  - [ ] `rollout()` — inference-only, future-only masking + Hungarian matching
-  - [ ] `criterion()` / `get_cost()` — Costable protocol for CEM
+### Phase 1: Core model ✅ COMPLETE
+- [x] `stable_worldmodel/wm/cjepa/__init__.py`
+- [x] `stable_worldmodel/wm/cjepa/module.py`
+  - [x] `BidirectionalTransformer` (reuses `lewm/module.py:Attention` with `causal=False`)
+  - [x] `TemporalPosEmb` (`nn.Embedding(max_T, 128)`, the `e_τ`)
+  - [x] `BidirectionalBlock` (wraps Attention + FeedForward)
+- [x] `stable_worldmodel/wm/cjepa/cjepa.py`
+  - [x] `encode()` — slot encoder + aux embeddings
+  - [x] `_build_masked_tokens()` — object-level masking, identity anchor, temporal PE
+  - [x] `forward_train()` — masking → predict → MSE loss on masked tokens
+  - [x] `rollout()` — inference-only, future-only masking + sliding window
+  - [x] `criterion()` / `get_cost()` — Hungarian matching + L2 cost (Costable protocol)
+- [x] `DummySlotEncoder` placeholder (64×64 linear, for CPU testing without VideoSAUR)
+- [x] Smoke test: `forward_train` loss=1.30, backward OK, `get_cost` shape (2,2) ✓
 
-### Phase 2: Training pipeline
-- [ ] `scripts/train/cjepa.py` (copy of `lewm.py`, replace forward fn)
-- [ ] `scripts/train/config/cjepa.yaml`
-  - [ ] n_slots=4, slot_dim=128, history_len=3, future_len=1, max_masked=2
-  - [ ] predictor: depth=6, heads=16, dim_head=64, mlp_dim=2048
-  - [ ] VideoSAUR slot_encoder (HuggingFace model id)
-  - [ ] 30 epochs, Adam lr=5e-4, batch=256
+### Phase 2: Training pipeline ✅ COMPLETE
+- [x] `scripts/train/cjepa.py` (mirror of `lewm.py`, `cjepa_forward` calls `forward_train`)
+- [x] `scripts/train/config/cjepa.yaml`
+  - [x] n_slots=4, slot_dim=128, history_len=3, future_len=1, max_masked=2
+  - [x] predictor: depth=6, heads=16, dim_head=64, mlp_dim=2048
+  - [x] DummySlotEncoder placeholder (VideoSAUR added in Phase 3)
+  - [x] 30 epochs, Adam lr=5e-4, batch=256, bf16
 
 ### Phase 3: VideoSAUR integration
 - [ ] Find HuggingFace checkpoint for VideoSAUR (check `HazelNam/CJEPA` or `galilai-group/`)
@@ -106,9 +107,9 @@ This is a solid contribution to `galilai-group/stable-worldmodel`:
 
 ## Session Log
 
-### 2026-06-28 — Planning session
-- Read C-JEPA paper in full; understood architecture, masking strategy, training objective
-- Assessed stable-worldmodel codebase — confirmed no existing C-JEPA, identified all reusable components
-- Finalized implementation plan: ~400–600 lines of novel code, rest is plumbing reuse
-- Estimated cost: ~$1–2/run, ~$5–10 to reproduce paper results
-- **Next**: start Phase 1 (core model code) in a new coding session
+### 2026-06-28 — Phase 1+2 complete
+- Read C-JEPA paper; assessed codebase; finalized plan; estimated cost ~$1–2/run
+- Implemented `wm/cjepa/` module (module.py + cjepa.py): bidirectional transformer, object-level masking, identity anchor, temporal PE, Hungarian matching MPC
+- Implemented training script (`scripts/train/cjepa.py`) + config (`cjepa.yaml`)
+- All smoke tests pass: forward_train, backward, get_cost ✓
+- **Next**: Phase 3 — VideoSAUR integration (download checkpoint, implement `VideoSAUREncoder`)

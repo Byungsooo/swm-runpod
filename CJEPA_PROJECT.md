@@ -59,10 +59,20 @@ Paper target (Table 3, PushT): **88.67% success rate** with |M|=1, 6×128 tokens
   - [x] DummySlotEncoder placeholder (VideoSAUR added in Phase 3)
   - [x] 30 epochs, Adam lr=5e-4, batch=256, bf16
 
-### Phase 3: VideoSAUR integration
-- [ ] Find HuggingFace checkpoint for VideoSAUR (check `HazelNam/CJEPA` or `galilai-group/`)
-- [ ] Implement `VideoSAUREncoder` wrapper that returns (B, N, D) slots per frame
-- [ ] Smoke-test: load checkpoint, run on single PushT frame, verify slot shapes
+### Phase 3: VideoSAUR integration ✅ COMPLETE
+- [x] Find HuggingFace checkpoint for VideoSAUR — `HazelNam/CJEPA` hosts `pusht_videosaur_model.ckpt` (139MB, trained specifically on PushT, not an out-of-domain substitute), plus `pusht_videosaur_slots.pkl` (4.8GB pre-extracted reference slots)
+- [x] Implement `VideoSAUREncoder` wrapper — `stable_worldmodel/wm/cjepa/videosaur_encoder.py`, returns (B, T, N, D) slots per clip (not per independent frame — see note below)
+  - [x] Vendored minimal MIT-licensed modules from `martius-lab/videosaur` into `wm/cjepa/_videosaur/` (SlotAttention, MLP, temporal recurrence wrappers, RandomInit, slot-dynamics predictor) with attribution + LICENSE
+  - [x] `wm/cjepa/download.py`: `download_videosaur_checkpoint()` / `download_videosaur_reference_slots()`
+  - [x] Wired into `CJEPAWorldModel._extract_slots` via a `requires_temporal_context` flag (VideoSAUR's Slot Attention is recurrent frame-to-frame, unlike `DummySlotEncoder`)
+  - [x] `cjepa.yaml`: `img_size` 224→196 (VideoSAUR's trained resolution), `slot_encoder` now targets `VideoSAUREncoder`
+- [x] Smoke-test: `scripts/train/smoke_test_videosaur.py` — loads real checkpoint, runs on a real PushT clip (rendered live from `swm/PushT-v1`, since the full training dataset isn't collected yet — that's Phase 5), verifies shape `(1,4,4,128)`, finite values, and genuine frame-to-frame slot evolution. Also verified full `CJEPAWorldModel.forward_train`+`backward` and `.rollout`/`.get_cost` (MPC path) end-to-end with the real checkpoint.
+
+**Key discovery**: the reference repo's checked-in `pusht_dinov2_hf.yml` config says `backbone.name: TimmExtractor`, but the actual released checkpoint's `state_dict` keys (`embeddings.cls_token`, `encoder.layer.0.attention.attention.key`, `layernorm.weight`) are HuggingFace `transformers.Dinov2Model` naming, not timm's. Confirmed by downloading the checkpoint and inspecting `state_dict.keys()` directly, then cross-checking the fork's actual `encoders.py` source (the "_hf" filename suffix means HF-backbone variant; `TimmExtractor` in the config is vestigial/unused — `FrameEncoder.build()` hardcodes `AutoModel.from_pretrained("facebook/dinov2-small")`). This meant **no new `timm` dependency was needed** — reused this repo's existing `create_backbone("dinov2_small")` (`wm/prejepa/module.py`), matching the pattern already used by `gcbc.py`/`hilp.py`/`gciql.py`/`gcivl.py`. `load_state_dict(strict=False)` loads with **zero missing keys** and exactly 53 unexpected keys, all `decoder.*` (the reconstruction head we don't need for inference) — strong confirmation the reconstructed architecture is exact.
+
+**Environment fix (unrelated bug, affects the whole repo)**: `transformers.AutoModel.from_pretrained(...)` was broken Pod-wide by a stale `torchaudio==2.4.1+cu124` (leftover from the base Docker image) mismatched against `torch==2.12.1+cu130` — newer `transformers` transitively imports it for an ASR loss module, and the guarded `is_torchaudio_available()` check passed (package present) but the compiled `.so` failed to load. `torchaudio` isn't a dependency of this project at all; `pip uninstall torchaudio` fixed it. This was silently breaking `gcbc.py`/`hilp.py`/`gciql.py`/`gcivl.py`/`prejepa` too, not just this Phase 3 work — worth baking the uninstall (or an unpinned/compatible reinstall) into the Docker image so future Pods don't hit it.
+
+**Deferred to Phase 5 (not blocking)**: numerical cross-check of `VideoSAUREncoder`'s output against `pusht_videosaur_slots.pkl` needs the exact same dataset clips used at extraction time, which requires collecting the PushT training dataset first (`pusht_expert_train.lance` isn't present on this Pod yet — that's already a Phase 5 checklist item). Also noted: `data/pusht.yaml` uses `frameskip=5` vs. VideoSAUR's training `frameskip=2` — a minor domain-shift risk, flagged in `cjepa.yaml`, not addressed here.
 
 ### Phase 4: Smoke test
 - [ ] CPU unit test: shapes, masking logic, loss is not NaN
@@ -114,3 +124,13 @@ This is a solid contribution to `galilai-group/stable-worldmodel`:
 - All smoke tests pass: forward_train, backward, get_cost ✓
 - Added `CJEPA_ARCHITECTURE.html` — architecture diagrams, loss/training explanation, references
 - **Next**: Phase 3 — VideoSAUR integration (download checkpoint, implement `VideoSAUREncoder`)
+
+### 2026-07-01 — Phase 3 complete: VideoSAUR integration
+- Found and downloaded the official PushT VideoSAUR checkpoint (`HazelNam/CJEPA` on HF) — confirmed live via direct HTTP checks before trusting it, not just an agent's summary (which initially and incorrectly claimed no PushT-specific checkpoint existed)
+- Vendored a minimal MIT-licensed subset of `martius-lab/videosaur` into `wm/cjepa/_videosaur/` (SlotAttention, MLP projection, temporal recurrence wrappers, RandomInit, slot-dynamics predictor) with attribution + LICENSE
+- Built `VideoSAUREncoder` (`wm/cjepa/videosaur_encoder.py`); discovered mid-implementation that the checkpoint actually uses a HuggingFace DINOv2 backbone (not timm as the reference YAML suggested) by inspecting `state_dict` keys directly — reused this repo's existing `create_backbone` utility instead of adding `timm`. `load_state_dict(strict=False)` loads with zero missing keys
+- Wired into `CJEPAWorldModel._extract_slots` via a `requires_temporal_context` flag; updated `cjepa.yaml` (`img_size` 224→196, `slot_encoder` → `VideoSAUREncoder`) and `pyproject.toml` (`+scipy`)
+- Fixed an unrelated Pod-wide bug blocking all `transformers.AutoModel.from_pretrained` calls (stale `torchaudio` leftover from the base Docker image, mismatched against the installed torch build) — was silently breaking `gcbc.py`/`hilp.py`/`gciql.py`/`gcivl.py`/`prejepa` too; worth baking the fix into the Dockerfile
+- All smoke tests pass: shape/NaN/temporal-evolution checks on real live-rendered PushT frames (`scripts/train/smoke_test_videosaur.py`), plus full `CJEPAWorldModel.forward_train`+`backward` and `.rollout`/`.get_cost` (MPC path) end-to-end with the real checkpoint
+- Deferred to Phase 5: numerical cross-check against the authors' pre-extracted `pusht_videosaur_slots.pkl` (needs the same dataset clips, which requires collecting `pusht_expert_train.lance` first — already a Phase 5 item); the `frameskip=5` vs. VideoSAUR's training `frameskip=2` domain-shift risk (flagged, not fixed)
+- **Next**: Phase 4 — CPU unit tests (`tests/wm/test_cjepa.py`, mirroring `test_lewm.py`), 1-epoch smoke run, verify loss decreases

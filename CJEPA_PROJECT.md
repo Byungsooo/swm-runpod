@@ -74,10 +74,10 @@ Paper target (Table 3, PushT): **88.67% success rate** with |M|=1, 6×128 tokens
 
 **Deferred to Phase 5 (not blocking)**: numerical cross-check of `VideoSAUREncoder`'s output against `pusht_videosaur_slots.pkl` needs the exact same dataset clips used at extraction time, which requires collecting the PushT training dataset first (`pusht_expert_train.lance` isn't present on this Pod yet — that's already a Phase 5 checklist item). Also noted: `data/pusht.yaml` uses `frameskip=5` vs. VideoSAUR's training `frameskip=2` — a minor domain-shift risk, flagged in `cjepa.yaml`, not addressed here.
 
-### Phase 4: Smoke test
-- [ ] CPU unit test: shapes, masking logic, loss is not NaN
-- [ ] 1-epoch smoke run: `python scripts/train/cjepa.py trainer.max_epochs=1 loader.batch_size=8`
-- [ ] Verify loss decreases
+### Phase 4: Smoke test ✅ COMPLETE
+- [x] CPU unit test: shapes, masking logic, loss is not NaN — `tests/wm/test_cjepa.py`
+- [x] 1-epoch smoke run (both `DummySlotEncoder` and real `VideoSAUREncoder`, on a tiny disposable toy dataset — see notes below)
+- [x] Verify loss decreases — 8-epoch run: `validate/pred_loss` 2.74 → 0.050 → ... → 0.017 (monotonic, converging)
 
 ### Phase 5: Full training + eval
 - [ ] Run 30-epoch training on RTX 4090
@@ -86,8 +86,8 @@ Paper target (Table 3, PushT): **88.67% success rate** with |M|=1, 6×128 tokens
 - [ ] Compare to Table 3 baselines: OC-JEPA (76%), C-JEPA target (88.67%)
 
 ### Phase 6: PR preparation
-- [ ] Add `tests/wm/test_cjepa.py` (shape checks, masking, loss)
-- [ ] Update `stable_worldmodel/wm/__init__.py` to export CJEPAWorldModel
+- [x] Add `tests/wm/test_cjepa.py` (shape checks, masking, loss) — done in Phase 4
+- [x] `stable_worldmodel/wm/__init__.py` already exports `CJEPAWorldModel` — turned out to already be wired up (`from .cjepa import *`) when checked during Phase 4; no action needed
 - [ ] Write PR description with results table
 
 ---
@@ -134,3 +134,18 @@ This is a solid contribution to `galilai-group/stable-worldmodel`:
 - All smoke tests pass: shape/NaN/temporal-evolution checks on real live-rendered PushT frames (`scripts/train/smoke_test_videosaur.py`), plus full `CJEPAWorldModel.forward_train`+`backward` and `.rollout`/`.get_cost` (MPC path) end-to-end with the real checkpoint
 - Deferred to Phase 5: numerical cross-check against the authors' pre-extracted `pusht_videosaur_slots.pkl` (needs the same dataset clips, which requires collecting `pusht_expert_train.lance` first — already a Phase 5 item); the `frameskip=5` vs. VideoSAUR's training `frameskip=2` domain-shift risk (flagged, not fixed)
 - **Next**: Phase 4 — CPU unit tests (`tests/wm/test_cjepa.py`, mirroring `test_lewm.py`), 1-epoch smoke run, verify loss decreases
+
+### 2026-07-03 — Phase 4 complete: smoke test, found and fixed 3 integration bugs
+
+- Added `tests/wm/test_cjepa.py`: `get_cost` shape-contract tests (mirroring `test_lewm.py`/`test_pldm.py`'s bare-model + monkey-patched-rollout style), plus new real `forward_train`+backward tests and `_build_masked_tokens` invariant checks (future always masked, t0 anchor never masked, history mask count respects `max_masked_slots`) — no prior wm test exercised a real forward+loss pass. All 6 pass; full `pytest tests/wm/` (48 tests) also clean.
+- Correction to the Phase 3 log above: `smoke_test_videosaur.py` only exercises `VideoSAUREncoder` in isolation — it never actually calls `forward_train`/`rollout`/`get_cost` on `CJEPAWorldModel`, despite the prior entry's claim. Worth remembering: verify what a smoke test *actually* covers by reading it, not by trusting a summary (including my own from a prior session).
+- **Environment blocker, unrelated to CJEPA code**: `torch.cuda.is_available()` was `False` on this fresh Pod — `nvidia-smi` reports driver 570.195.03 (CUDA 12.8 max), but `Dockerfile`'s unpinned `pip install 'stable-worldmodel[all]'` resolved PyPI's latest torch (2.12.1+cu130, CUDA 13.0), which the driver can't run. This blocks *all* GPU training (`trainer.accelerator: gpu` in every `scripts/train/*.yaml`), not just VideoSAUR. Same root pattern as Phase 3's `torchaudio` fix — baked into the image, so it recurs on every fresh Pod since the Dockerfile was never patched. Fixed locally this session (`pip uninstall torchaudio` + reinstall `torch==2.12.1+cu126`/`torchvision==0.27.1+cu126` — same versions, just the CUDA-12 build) and verified via full `pytest tests/wm/` + `scripts/train/smoke_test_videosaur.py` both passing after the swap. **Not persisted** — documented in `TODO_FIX_DRIVER_TORCH_MISMATCH.md` (repo root) with the proposed Dockerfile patch; needs a deliberate image rebuild, didn't want to make that call unilaterally.
+- Rather than pull Phase 5's real `pusht_expert_train.lance` collection forward (that dataset doesn't exist on this Pod and collecting it is explicitly a Phase 5 task), added `scripts/data/collect_pusht_smoke.py` — collects a small disposable 50-episode `pusht_smoke.lance` (same schema as the real dataset, ~10s to collect) purely for smoke-test fixture data.
+- Ran the 1-epoch smoke train against `pusht_smoke.lance`, first with `DummySlotEncoder` (CPU-cheap), then with the real `VideoSAUREncoder` + real checkpoint on the RTX 2000 Ada. Both runs surfaced (and fixed) real bugs no prior smoke test had caught:
+  1. `DummySlotEncoder` didn't accept the `checkpoint_path` kwarg the yaml's `model.slot_encoder` node always sets, and Hydra's `~key` CLI delete-override silently fails on `null`-valued keys (a known OmegaConf quirk — a null value is indistinguishable from "missing" to the delete check) — so the yaml's own documented smoke-test override never actually worked. Fixed by adding an accepted-and-ignored `checkpoint_path=None` param to `DummySlotEncoder`.
+  2. `CJEPAWorldModel.encode()` read `info['state']` for the proprio encoder, but every other baseline in this repo (`gcbc`/`gcivl`/`gciql`/`hilp`) — and the training script's own `proprio_encoder.input_dim` sizing — uses the `'proprio'` column. `'state'` and `'proprio'` are different columns with different dims (7 vs. 4). Fixed `cjepa.py:162-163` to read `info['proprio']`.
+  3. `scripts/train/cjepa.py` sized `proprio_encoder.input_dim` as `frameskip * dataset.get_dim('proprio')`, copy-pasted from the `action_encoder` line above it — but only `action` gets stacked across the frameskip window by the dataset (`data/dataset.py:70-83`); `proprio` stays at its raw per-frame dim. Fixed to drop the `frameskip *` multiplier for proprio.
+  4. Under `trainer.precision: bf16`, `_build_masked_tokens`'s boolean-mask assignment (`tokens[visible_mask] = ...`) requires an exact dtype match (`index_put_` semantics, stricter than plain indexed assignment), but `temporal_emb`'s output dtype didn't reliably match `slots_all`'s. Fixed by casting `t_embs` to `tokens.dtype` right after computing it.
+- After those fixes, both the `DummySlotEncoder` and real-`VideoSAUREncoder` 1-epoch runs complete cleanly (`fit/pred_loss` 0.149 and 0.195 respectively; VideoSAUR run confirmed "all tracked parameters received gradients on the first backward pass").
+- Verified loss actually decreases (not just "doesn't crash"): an 8-epoch run on the same toy dataset shows `validate/pred_loss` falling monotonically: 2.74 (pre-train) → 0.050 → 0.032 → 0.026 → 0.023 → 0.020 → 0.018 → 0.017 → 0.017 (converging).
+- **Next**: Phase 5 — collect the real `pusht_expert_train` PushT dataset, run the full 30-epoch training on an RTX 4090, MPC eval, compare to Table 3 baselines. Before that: consider whether to rebuild the Docker image with the `TODO_FIX_DRIVER_TORCH_MISMATCH.md` fix so future Pods don't hit the GPU blocker again.

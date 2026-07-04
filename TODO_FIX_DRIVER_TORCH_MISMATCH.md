@@ -92,6 +92,14 @@ trusting it, since RunPod's available driver versions can vary by node/region.
 
 ## Status
 
-Not yet applied to the Dockerfile — flagging here instead of editing
-`Dockerfile`/`pyproject.toml` directly, since that's a decision with a wider
-blast radius (affects every future Pod) than this session's scope.
+**Applied (2026-07-04).** `Dockerfile` now installs `torch==2.12.1`/
+`torchvision==0.27.1` from the `cu126` wheel index before
+`stable-worldmodel[all]`, and uninstalls the leftover `torchaudio` — see the
+fix described above. Pushed to `main`, which triggers the GitHub Actions
+rebuild of `b8k3/swm-dev:latest`.
+
+Still needs the smoke test / `pytest tests/wm/` re-run described above
+against a freshly rebuilt image on an actual Pod (this session's sandbox has
+no `docker` CLI to verify a build directly, and the node it was authored on
+already had a newer, CUDA-13-capable driver so it wouldn't reproduce the
+original failure anyway).

@@ -37,9 +37,22 @@ RUN wget -q "http://archive.ubuntu.com/ubuntu/pool/main/libg/libglvnd/libegl1_1.
 # pip upgrade
 RUN pip install --upgrade pip
 
+# Pin torch/torchvision to a CUDA 12.x build compatible with the driver
+# available on RunPod's nodes (PyPI's default resolves newer CUDA-13 wheels
+# some node drivers can't run yet). Installed before stable-worldmodel[all]
+# so that install sees a satisfying version already present and doesn't
+# upgrade it to the unpinned CUDA-13 default.
+RUN pip install --index-url https://download.pytorch.org/whl/cu126 \
+    'torch==2.12.1' 'torchvision==0.27.1'
+
 # stable-worldmodel (PyPI release)
 # Source code will be cloned separately to /workspace for editable development
 RUN pip install 'stable-worldmodel[all]'
+
+# torchaudio is a leftover from the base runpod/pytorch image, not an actual
+# project dependency, and ends up version-mismatched against the torch
+# pinned above (previously broke transformers.AutoModel.from_pretrained).
+RUN pip uninstall -y torchaudio
 
 # Dev tools
 RUN pip install \

@@ -92,14 +92,17 @@ trusting it, since RunPod's available driver versions can vary by node/region.
 
 ## Status
 
-**Applied (2026-07-04).** `Dockerfile` now installs `torch==2.12.1`/
+**Applied and verified (2026-07-04).** `Dockerfile` now installs `torch==2.12.1`/
 `torchvision==0.27.1` from the `cu126` wheel index before
 `stable-worldmodel[all]`, and uninstalls the leftover `torchaudio` — see the
-fix described above. Pushed to `main`, which triggers the GitHub Actions
-rebuild of `b8k3/swm-dev:latest`.
+fix described above. Pushed to `main` (`ef7a99a`); GitHub Actions rebuild of
+`b8k3/swm-dev:latest` completed successfully and Docker Hub's `latest` tag
+updated accordingly.
 
-Still needs the smoke test / `pytest tests/wm/` re-run described above
-against a freshly rebuilt image on an actual Pod (this session's sandbox has
-no `docker` CLI to verify a build directly, and the node it was authored on
-already had a newer, CUDA-13-capable driver so it wouldn't reproduce the
-original failure anyway).
+Re-verified on a fresh Pod against the rebuilt image: `torch.cuda.is_available()
+== True` with `torch 2.12.1+cu126`/`torchvision 0.27.1+cu126` and no
+`torchaudio` present, full `pytest tests/wm/` (48/48) passing, and
+`scripts/train/smoke_test_videosaur.py` passing end-to-end (real checkpoint,
+real GPU, correct slot shapes, genuine temporal signal, and no
+`transformers.AutoModel.from_pretrained` breakage from the old `torchaudio`
+mismatch). Fix confirmed working — no further action needed here.

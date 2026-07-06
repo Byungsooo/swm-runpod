@@ -379,6 +379,21 @@ manually `pkill`s the leftover workers. Worth a callout in the training script's
 docs/README (e.g. "if a run OOMs, check for and kill orphaned
 `multiprocessing.forkserver` processes before retrying") rather than a code change.
 
+**Update (2026-07-06)**: this recurred on a completely fresh Pod (no prior crashed
+run, no leaked workers possible) — a brand-new `python3 scripts/train/cjepa.py`
+process with the shipped `cjepa.yaml` defaults (`num_workers=6`,
+`persistent_workers=True`, `prefetch_factor=3`) got SIGKILL'd (exit 137) on its
+very first attempt, right as training was about to start (before any step
+completed). So this isn't purely a "clean up after a crash" gotcha — the shipped
+defaults themselves are apparently too memory-hungry for a ~29GB-cgroup-capped
+dev pod even in the best case. Reducing to `num_workers=2`, `prefetch_factor=2`,
+`persistent_workers=False` fixed it immediately (trained cleanly end-to-end
+afterwards). **Suggested upstream fix**: lower `cjepa.yaml`'s (and likely the
+other `scripts/train/config/*.yaml`, which mostly share the same
+`num_workers=6`/`persistent_workers=True`/`prefetch_factor=3` pattern) shipped
+defaults, or at least document the memory tradeoff next to the config keys,
+rather than relying on every session rediscovering this the hard way.
+
 ---
 
 ## Not filed here (already tracked elsewhere)

@@ -42,8 +42,14 @@ RUN pip install --upgrade pip
 # some node drivers can't run yet). Installed before stable-worldmodel[all]
 # so that install sees a satisfying version already present and doesn't
 # upgrade it to the unpinned CUDA-13 default.
-RUN pip install --index-url https://download.pytorch.org/whl/cu126 \
-    'torch==2.12.1' 'torchvision==0.27.1'
+#
+# cu128, not cu126: RTX 50-series (Blackwell, sm_120) cards need CUDA 12.8+
+# kernels. cu126 wheels install and report torch.cuda.is_available()==True
+# on a 5090 but silently lack sm_120 kernels (warns, then fails at the first
+# real op) -- if the fleet moves back to 4090/2000-Ada-only, cu126 is fine
+# again, but cu128 also runs on those, so there's no reason to downgrade.
+RUN pip install --index-url https://download.pytorch.org/whl/cu128 \
+    'torch==2.11.0' 'torchvision==0.26.0'
 
 # stable-worldmodel (PyPI release)
 # Source code will be cloned separately to /workspace for editable development
